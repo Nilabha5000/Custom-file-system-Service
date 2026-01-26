@@ -1,0 +1,6 @@
+.venv
+__pycache__/
+fslib.so
+fs_save.dump
+.env
+.vscode

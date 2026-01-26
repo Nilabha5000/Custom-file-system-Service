@@ -1,0 +1,143 @@
+#include "path.h"
+#include <stdlib.h>
+#include <string.h>
+
+struct path_node *create_path_node(const char *name){
+    struct path_node *pn = (struct path_node*)malloc(sizeof(struct path_node));
+    if(pn == NULL) return NULL;
+
+    pn->name = strdup(name);
+    if(pn->name == NULL){
+        free(pn);
+        return NULL;
+    }
+
+    pn->next = pn->prev = NULL;
+
+    return pn;
+}
+
+struct path *create_path(){
+    struct path *p = (struct path*)malloc(sizeof(struct path));
+
+    if(p == NULL) return NULL;
+   
+    p->begin = p->end = NULL;
+    p->size = 0;
+    return p;
+}
+
+int is_path_empty(struct path *p){
+    return p->begin == NULL;
+}
+void path_destroy(struct path *p){ 
+    if(p == NULL) return;
+
+    if(!is_path_empty(p)){
+        struct path_node * curr = p->begin;
+        while(curr != NULL){
+            struct path_node *next = curr->next;
+            free(curr->name);
+            free(curr);
+            curr = next;
+        }
+    }
+
+    free(p);
+}
+
+void path_push(struct path *p , const char *name){
+    if(!p) return;
+    
+    struct path_node *pn = create_path_node(name);
+
+    if(pn == NULL) return;
+    if(is_path_empty(p)){
+        p->begin = p->end = pn;
+        return;
+    }
+
+    pn->prev = p->end;
+    p->end->next = pn;
+    p->end = p->end->next;
+    p->size++;
+}
+
+void path_pop(struct path *p){
+    if(!p || is_path_empty(p)) return;
+
+    if(p->begin == p->end){
+        free(p->begin);
+        p->begin = p->end = NULL;
+        return;
+    }
+
+    p->end = p->end->prev;
+    free(p->end->next->name);
+    free(p->end->next);
+    p->end->next = NULL;
+    p->size--;
+
+}
+
+struct path *get_path(const char *pth){
+
+    struct path *p = create_path();
+
+    if(p == NULL) return NULL;
+    int size = 20;
+    char *token = (char*)malloc(size);
+    if(token == NULL){
+        free(p);
+        return NULL;
+    }
+
+    int n = strlen(pth);
+    int i = 0, index = 0;
+    if(pth[0] == '/')
+    {
+        token[index] = '/';
+        index++;
+        i++;
+    }
+
+    for(; i < n; ++i){
+        if(pth[i] != '/'){
+            if(index >= size){
+                size *= 2;
+                char *temp = realloc(token, size);
+                if(temp == NULL){
+                    free(token);
+                    path_destroy(p);
+                    return NULL;
+                }
+                token = temp;
+            }
+            token[index++] = pth[i];
+        }
+        else if(i != n-1 && pth[i] == '/'){
+            token[index] = '\0';
+            if(strlen(token) != 0)
+                 path_push(p, token);
+            free(token);
+            size = 20;
+            index = 0;
+
+            token = (char*)malloc(size);
+
+            if(token == NULL)
+            {
+                path_destroy(p);
+                return NULL;
+            }
+
+            token[index++] = '/';
+        }
+    }
+
+    token[index] = '\0';
+
+    path_push(p,token);
+    free(token);
+    return p;
+}
