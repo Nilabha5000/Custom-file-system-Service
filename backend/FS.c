@@ -5,6 +5,8 @@
 #include <errno.h>
 #include <string.h>
 
+#define Dir 1
+#define File 2
 struct file{
     char *file_name;
     char content_buffer[MAX_CONTENT_LEN];
@@ -13,15 +15,17 @@ struct dir{
      struct obj_table *files;
      char *dir_name;
      struct obj_table *child;
+     struct dir *parent;
 };
 
 struct FS{
     struct dir root_parent;
     struct dir *root;
-
 };
 void save_dir(struct dir *d, FILE *fp);
 struct FS *initFS();
+int belongs_to(struct dir *src_dir, struct path *p);
+int is_decendent(struct dir *src , struct dir *dest);
 struct dir *make_directory(const char *);
 struct FS *initFS(){
      struct FS *fs = (struct FS*)malloc(sizeof(struct FS));
@@ -88,6 +92,7 @@ struct dir *make_directory(const char *dir_name){
          free(d);
          return NULL;
      }
+     d->parent = NULL;
     return d;
 }
 
@@ -281,29 +286,218 @@ FS_ERROR make_directory_in_a_directory(struct FS *fs , const char *dir_path){
           return PATH_FAILED;
      }
 
-     char *dir_name = p->end->name;
-
      struct dir *dest_dir = get_dest_dir(fs,p);
      if(dest_dir == NULL){
           path_destroy(p);
           return DIR_NOT_FOUND;
      }
      //check for if current directory has a directory of dir_name.
-     if(get_obj(dest_dir->child,dir_name)){
+     if(get_obj(dest_dir->child,p->end->name)){
           path_destroy(p);
           return DIR_ALREADY_EXISTS;
      }
 
-     struct dir *new_dir = make_directory(dir_name);
+     struct dir *new_dir = make_directory(p->end->name);
      if(dest_dir->child == NULL || new_dir == NULL){
           path_destroy(p);
           return DIR_MEMORY_ALLOCATION_FAILED;
      }
-     insert_obj(dest_dir->child,dir_name,new_dir);
+     new_dir->parent = dest_dir;
+     insert_obj(dest_dir->child,new_dir->dir_name,new_dir);
+
      path_destroy(p);
 
      return DIR_OK;
 }
+//It returns an Int.
+//Returns 1 when dest is a dencendent of src.
+//Returns 0 when dest is not a decendent of src.
+int is_descendant(struct dir *src , struct dir *dest){
+     
+     if (!src || !dest) return 0;
+
+    struct dir *curr = dest;
+
+    while (curr)
+    {
+        if (curr == src)
+            return 1;
+
+        // protection against corrupted parent loop
+        if (curr == curr->parent)
+            break;
+
+        curr = curr->parent;
+    }
+
+    return 0;
+}
+//It returns an int that tells the path belongs to a file or a directory.
+//returns 1 when it belongs to directory.
+//returns 2 when it belongs to file.
+//returns 0 when it belongs to nothing.
+int belongs_to(struct dir *src_dir , struct path *p){
+        
+     if(get_obj(src_dir->child,p->end->name) != NULL)
+         return 1;
+     if(get_obj(src_dir->files, p->end->name+1) != NULL)
+        return 2;
+     return 0;
+}
+FS_ERROR move(struct FS *fs,
+              const char *src_path,
+              const char *dest_path)
+{
+    if (!fs || !src_path || !dest_path)
+        return FS_FAILED;
+
+    FS_ERROR ret = MOVE_FAILED;
+
+    struct path *src = NULL;
+    struct path *dest = NULL;
+
+    char *s_src = get_slashed_path(src_path);
+    char *s_dest = get_slashed_path(dest_path);
+
+    if (!s_src || !s_dest)
+        goto cleanup;
+
+    src = get_path(s_src);
+    dest = get_path(s_dest);
+
+    if (!src || !dest)
+        goto cleanup;
+
+    /* Get parent directories */
+    struct dir *src_parent = get_dest_dir(fs, src);
+    struct dir *dest_parent = get_dest_dir(fs, dest);
+
+    if (!src_parent || !dest_parent)
+    {
+        ret = DIR_NOT_FOUND;
+        goto cleanup;
+    }
+
+    /* Final destination dir */
+    struct dir *dest_dir =
+        (struct dir *)get_obj(dest_parent->child,
+                              dest->end->name);
+
+    if (!dest_dir)
+    {
+        ret = DIR_NOT_FOUND;
+        goto cleanup;
+    }
+
+    /* What are we moving? */
+    int type = belongs_to(src_parent, src);
+
+    /* ========== MOVE DIRECTORY ========== */
+
+    if (type == Dir)
+    {
+        struct dir *src_dir =
+            (struct dir *)get_obj(src_parent->child,
+                                  src->end->name);
+
+        if (!src_dir)
+        {
+            ret = DIR_NOT_FOUND;
+            goto cleanup;
+        }
+
+        /* Prevent self / descendant move */
+        if (is_descendant(src_dir, dest_dir))
+        {
+            ret = CANNOT_MOVE_TO_IT_SELF;
+            goto cleanup;
+        }
+
+        /* Check overwrite */
+        if (get_obj(dest_dir->child, src_dir->dir_name))
+        {
+            ret = DEST_ALREADY_EXISTS;
+            goto cleanup;
+        }
+
+        /* Detach */
+        del_obj(src_parent->child, src->end->name);
+
+        /* Attach */
+        if (!insert_obj(dest_dir->child,
+                        src_dir->dir_name,
+                        src_dir))
+        {
+            /* rollback */
+            insert_obj(src_parent->child,
+                       src_dir->dir_name,
+                       src_dir);
+
+            ret = MOVE_FAILED;
+            goto cleanup;
+        }
+
+        /* Fix parent */
+        src_dir->parent = dest_dir;
+
+        ret = MOVE_OK;
+        goto cleanup;
+    }
+
+    /* ========== MOVE FILE ========== */
+
+    if (type == File)
+    {
+        struct file *f =
+            (struct file *)get_obj(src_parent->files,
+                                   src->end->name + 1);
+
+        if (!f)
+        {
+            ret = FILE_NOT_FOUND;
+            goto cleanup;
+        }
+
+        if (get_obj(dest_dir->files, f->file_name))
+        {
+            ret = DEST_ALREADY_EXISTS;
+            goto cleanup;
+        }
+
+        /* Detach */
+        del_obj(src_parent->files, src->end->name + 1);
+
+        /* Attach */
+        if (!insert_obj(dest_dir->files,
+                        f->file_name,
+                        f))
+        {
+            /* rollback */
+            insert_obj(src_parent->files,
+                       f->file_name,
+                       f);
+
+            ret = MOVE_FAILED;
+            goto cleanup;
+        }
+
+        ret = MOVE_OK;
+        goto cleanup;
+    }
+
+    ret = MOVE_FAILED;
+
+cleanup:
+
+    if (s_src) free(s_src);
+    if (s_dest) free(s_dest);
+
+    if (src) path_destroy(src);
+    if (dest) path_destroy(dest);
+
+    return ret;
+}
+
 void delete_dir_tree(struct dir *root){
        if(root == NULL){
            return;

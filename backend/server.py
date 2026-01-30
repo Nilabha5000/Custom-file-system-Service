@@ -8,12 +8,15 @@ import threading
 class PathRequest(BaseModel):
     path : str
     pass
+class DoublePathRequest(BaseModel):
+    src_path : str
+    dest_path : str
 class fileContentRequest(BaseModel):
     path : str
     content : str
 fs_lock = threading.Lock()
 app = FastAPI()
-fs = File_System("fs_save.dump")
+fs = File_System("fs.dump")
 origins = [
     "http://localhost:5173",
     "http://127.0.0.1:5173"
@@ -102,6 +105,22 @@ def remove_file(req : PathRequest):
             res_list = req.path.split("/")
             res_list.pop()
             return {"status" : "OK" , "result" : fs.get_contents("/".join(res_list))}
+@app.post("/api/move/")
+def move(req : DoublePathRequest):
+    with fs_lock:
+        if (not req.src_path and not req.dest_path ) and (len(req.src_path.strip()) == 0 and len(req.dest_path.strip()) == 0 ):
+            return {"status" : "FAILURE" , "message" : "empty field"}
+        status = fs.cut(req.src_path , req.dest_path)
+        if status == 9:
+            return {"status" : "FAILURE" , "message" : "Directory not found"}
+        if status == 21:
+            return {"status" : "FAILURE" , "message" : "Directory can not move to itself"}
+        if status == 22:
+            return {"status" : "FAILURE" , "message" : "It already exists so can not move"}
+        print(req.src_path)
+        print(req.dest_path)
+        return {"status" : "OK" , "result" : fs.get_contents(req.dest_path)}
+        
 @app.on_event("shutdown")
 def shutdown():
     fs.close()

@@ -10,6 +10,10 @@ export default {
       
       items:[],
       path_arr:[],
+      src_path : "",
+      move_item : "",
+      show_move_button : false,
+      show_to_move_button : false,
       displayDirCreation:false,
       displayFileCreation : false,
       displayDirDeletion : false,
@@ -143,7 +147,39 @@ export default {
            this.items = res.data.result;
            this.displayFileDeletion = false;
         }
-    }
+    },
+    async mv(){
+        const s_path = this.src_path.split("/");
+        const item = s_path[s_path.length-1];
+
+        for(let i = this.path_arr.length-2 ; i >= 0; --i){
+            if(item === this.path_arr[i]){
+                 
+                 alert("lllDirectory can not move it to itself");
+                 return;
+            }
+        }
+
+        const res = await axios.post("http://localhost:8000/api/move/",
+          {src_path : this.src_path , dest_path : this.path_arr.join("/")}
+        );
+        console.log(this.src_path);
+        console.log(this.path_arr.join("/"));
+        this.show_move_button = false;
+        this.move_item = "";
+        if(res.data.status === "FAILURE"){
+             alert(res.data.message);
+        }
+        else{
+           this.items = res.data.result;
+        }
+    },
+    save_to_src_path(){
+         this.src_path = this.path_arr.join("/") + `/${this.move_item}`;
+         this.show_move_button = true;
+    },
+
+
   }
   
 }
@@ -174,6 +210,12 @@ export default {
        <input type="text" placeholder="File Name" v-model = "filename">
        <v-btn @click = "del_file">Remove</v-btn>
     </div>
+    <v-btn @click = "show_to_move_button = !show_to_move_button">To move</v-btn>
+    <div v-if = "show_to_move_button">
+       <input type="text" placeholder="Item Name" v-model = "move_item">
+       <v-btn @click = "save_to_src_path">To Move</v-btn>
+    </div>
+    <v-btn v-if = "show_move_button" @click = "mv">Move</v-btn>
   </div>
   
   <h1 v-if = "!items || items.length === 0" class = "dir_empty">directory is empty</h1>

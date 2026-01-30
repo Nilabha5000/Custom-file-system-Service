@@ -17,6 +17,7 @@ FS_ERROR make_directory_in_a_directory(struct FS* , const char *);
 FS_ERROR create_file(struct FS * , const char *);
 FS_ERROR write_file(struct FS * , const char *, const char *);
 FS_ERROR remove_file(struct FS * , const char *);
+FS_ERROR move(struct FS * , const char * , const char *);
 char* show_file_content(struct FS *, const char *);
 void delete_dir_tree(struct dir *);
 FS_ERROR delete_dir(struct FS *, char *);

@@ -2,5 +2,6 @@
 __pycache__/
 fslib.so
 fs_save.dump
+fs.dump
 .env
 .vscode
