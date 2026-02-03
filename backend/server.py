@@ -14,6 +14,9 @@ class DoublePathRequest(BaseModel):
 class fileContentRequest(BaseModel):
     path : str
     content : str
+class itemRenameRequest(BaseModel):
+    path : str
+    new_name : str
 fs_lock = threading.Lock()
 app = FastAPI()
 fs = File_System("fs.dump")
@@ -117,10 +120,28 @@ def move(req : DoublePathRequest):
             return {"status" : "FAILURE" , "message" : "Directory can not move to itself"}
         if status == 22:
             return {"status" : "FAILURE" , "message" : "It already exists so can not move"}
-        print(req.src_path)
-        print(req.dest_path)
         return {"status" : "OK" , "result" : fs.get_contents(req.dest_path)}
-        
+
+@app.post("/api/rename/")
+def rename_item(req : itemRenameRequest):
+    with fs_lock:
+        if (not req.path and not req.new_name) and (len(req.path.strip()) == 0 and len(req.new_name.strip()) == 0):
+            return {"status" : "FAILURE" , "message" : "empty field"}
+        status = fs.rename(req.path, req.new_name)
+        if status == 23:
+            return {"status" : "FAILURE" ,"message": "Item is not file or a directory"}
+        if status == 9:
+            return {"status" : "FAILURE" ,"message": "Directory not found"}
+        if status == 10:
+            return {"status" : "FAILURE" ,"message": "Directory already exists"}
+        if status == 5:
+            return {"status" : "FAILURE" ,"message": "File not found"}
+        if status == 6:
+            return {"status" : "FAILURE" ,"message": "File already exists"}
+        res_list = req.path.split("/")
+        res_list.pop()
+        return {"status" : "OK" ,"result": fs.get_contents("/".join(res_list))}
+
 @app.on_event("shutdown")
 def shutdown():
     fs.close()

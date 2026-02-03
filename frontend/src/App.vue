@@ -18,11 +18,17 @@ export default {
       displayFileCreation : false,
       displayDirDeletion : false,
       displayFileDeletion : false,
+      show_rename_box : false,
       dirname : "",
       filename : "",
       activefile : "",
       fileContent : "",
-      showEditor : false
+      new_name: "",
+      showEditor : false,
+      menuX: 0,
+      menuY: 0,
+      showMenu:false,
+      selectedItem : null
     }
   },
   mounted : async function (){
@@ -36,6 +42,22 @@ export default {
     }
   },
   methods: {
+    on_right_click(event , item){
+          this.showMenu = true;
+          this.menuX = event.clientX;
+          this.menuY = event.clientY;
+          this.selectedItem = item;
+
+          if(this.selectedItem.type === "dir"){
+              this.dirname = this.selectedItem.name;
+          }
+          else if(this.selectedItem.type === "file"){
+             this.filename = this.selectedItem.name;
+          }
+    },
+    on_right_click_empty(){
+         alert("right click on empty space");
+    },
     async item_on_click(item) {
        if(item.type === 'dir'){
           const res_list =  await this.get_dir_contents(this.path_arr.join("/") + `/${item.name}`);
@@ -148,6 +170,14 @@ export default {
            this.displayFileDeletion = false;
         }
     },
+    async del_item(){
+        if(this.selectedItem.type === "file"){
+            await this.del_file();
+        }
+        else{
+           await this.del_dir();
+        }
+    },
     async mv(){
         const s_path = this.src_path.split("/");
         const item = s_path[s_path.length-1];
@@ -175,10 +205,24 @@ export default {
         }
     },
     save_to_src_path(){
-         this.src_path = this.path_arr.join("/") + `/${this.move_item}`;
+         this.src_path = this.path_arr.join("/") + `/${this.selectedItem.name}`;
          this.show_move_button = true;
     },
+    
+    async rename(){
+         const res = await axios.post("http://localhost:8000/api/rename",
+          {path : this.path_arr.join("/") + `/${this.selectedItem.name}` , new_name : this.new_name}
+         );
+         this.show_rename_box = false;
+         this.new_name = "";
+         if(res.data.status === "FAILURE"){
+            alert(res.data.message);
+         }
+         else{
+            this.items = res.data.result;
 
+         }
+    }
 
   }
   
@@ -218,19 +262,56 @@ export default {
     <v-btn v-if = "show_move_button" @click = "mv">Move</v-btn>
   </div>
   
-  <h1 v-if = "!items || items.length === 0" class = "dir_empty">directory is empty</h1>
+  <div >
+      <h1 v-if = "!items || items.length === 0" class = "dir_empty">directory is empty</h1>
      
      <v-container v-else>
     <v-row>
       <v-col cols="12" md="3" v-for = "item in items" :key = "item.name">
-        <div @click = "item_on_click(item)" class = "icon">
-             <img :src= "dirImg" alt="file img" width="80" v-if = "item.type === 'dir'"/>
+        <div @click = "item_on_click(item)" class = "icon" @contextmenu.prevent = "on_right_click($event,item)">
+             <img :src= "dirImg" alt="dir img" width="80" v-if = "item.type === 'dir'"/>
              <img :src= "fileImg" alt="file img" width="80" v-if = "item.type === 'file'"/>
-             <div>{{ item.name }}</div>
+             <p>{{ item.name }}</p>
         </div>
       </v-col>
     </v-row>
   </v-container>
+
+ 
+  </div>
+   <v-menu
+   v-model = "showMenu"
+   :style = "{ left: menuX + 'px', top: menuY + 'px' }"
+   absolute
+   offset-y
+  >
+   <v-list>
+
+    <v-list-item @click="item_on_click(selectedItem)">
+      <v-list-item-title>Open</v-list-item-title>
+    </v-list-item>
+
+    <v-list-item @click="show_rename_box = true">
+      <v-list-item-title>Rename</v-list-item-title>
+    </v-list-item>
+
+    <v-list-item @click="del_item">
+      <v-list-item-title>Delete</v-list-item-title>
+    </v-list-item>
+
+    <v-list-item @click="save_to_src_path">
+      <v-list-item-title>Cut</v-list-item-title>
+    </v-list-item>
+    <v-list-item @click="mv" v-if = "show_move_button">
+      <v-list-item-title>Paste</v-list-item-title>
+    </v-list-item>
+    
+  </v-list>
+  </v-menu>
+    <div v-if = "show_rename_box" class="rename-box">
+      <input type="text" v-model="new_name" class = "rename-input" placeholder="Enter new name">
+    <v-btn  @click = "rename" class="rename-btn">Rename</v-btn>
+  </div>
   <v-dialog v-model="showEditor" max-width="700">
   <v-card>
     <v-card-title>
@@ -396,6 +477,47 @@ h1 {
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.04);
   letter-spacing: 0.3px;
 }
+.rename-box {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
 
+  background: #ffffff;
+  padding: 20px 25px;
+  border-radius: 10px;
+
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+
+  display: flex;
+  align-items: center;
+  gap: 12px;
+
+  z-index: 9999;
+}
+
+/* Input field */
+.rename-input {
+  width: 220px;
+  padding: 8px 10px;
+
+  border: 1px solid #ccc;
+  border-radius: 6px;
+
+  font-size: 15px;
+  outline: none;
+
+  transition: border 0.2s ease;
+}
+
+.rename-input:focus {
+  border-color: #1976d2; /* Vuetify blue */
+}
+
+/* Button */
+.rename-btn {
+  min-width: 90px !important;
+  font-weight: 500;
+}
 
 </style>

@@ -339,9 +339,9 @@ int is_descendant(struct dir *src , struct dir *dest){
 int belongs_to(struct dir *src_dir , struct path *p){
         
      if(get_obj(src_dir->child,p->end->name) != NULL)
-         return 1;
+         return Dir;
      if(get_obj(src_dir->files, p->end->name+1) != NULL)
-        return 2;
+        return File;
      return 0;
 }
 FS_ERROR move(struct FS *fs,
@@ -498,6 +498,83 @@ cleanup:
     return ret;
 }
 
+FS_ERROR change_name(struct FS *fs , const char *path , const char *new_name){
+    if(fs == NULL)
+      return FS_FAILED;
+    
+    char *slash_path = get_slashed_path(path);
+    if(slash_path == NULL)
+        return PATH_FAILED;
+   
+    struct path *p = get_path(slash_path);
+    free(slash_path);
+    if(p == NULL)
+      return PATH_FAILED;
+    
+    struct dir *dest_parent = get_dest_dir(fs,p);
+    if(dest_parent == NULL)
+    {
+        path_destroy(p);
+        return PATH_FAILED;
+    }
+
+    int type = belongs_to(dest_parent , p);
+    FS_ERROR ret = ITEM_IS_NOT_FILE_OR_DIR;
+    if(type == Dir){
+         struct dir *dest = (struct dir *)get_obj(dest_parent->child,p->end->name);
+
+        if(dest == NULL){
+            ret = DIR_NOT_FOUND;
+            goto cleanup;
+        }
+
+        int len = strlen(new_name)+2;
+        int start_with = 0;
+        char *s_new_name = malloc(len);
+        
+        if(new_name[0] != '/'){
+            s_new_name[0] = '/';
+            start_with = 1;
+        }
+        strcpy(s_new_name + start_with , new_name);
+        s_new_name[strlen(s_new_name)] = '\0';
+        if(get_obj(dest_parent->child,s_new_name) != NULL){
+            ret = DIR_ALREADY_EXISTS;
+            free(s_new_name);
+            goto cleanup;
+        }
+        del_obj(dest_parent->child, p->end->name);
+        free(dest->dir_name);
+        dest->dir_name = s_new_name;
+        
+        insert_obj(dest_parent->child,dest->dir_name, dest);
+
+        ret = DIR_OK;
+    }
+    else if(type == File){
+        struct file *dest_file = (struct file *)get_obj(dest_parent->files,p->end->name+1);
+
+        if(dest_file == NULL){
+            ret = FILE_NOT_FOUND;
+            goto cleanup;
+        }
+        if(get_obj(dest_parent->files,new_name) != NULL){
+            ret = FILE_ALREADY_EXISTS;
+            goto cleanup;
+        }
+        del_obj(dest_parent->files,p->end->name+1);
+        free(dest_file->file_name);
+        dest_file->file_name = strdup(new_name);
+        dest_file->file_name[strlen(dest_file->file_name)] = '\0';
+        
+        insert_obj(dest_parent->files, dest_file->file_name, dest_file);
+        ret = FILE_OK;
+    }
+    cleanup:
+    path_destroy(p);
+
+    return ret;
+}
 void delete_dir_tree(struct dir *root){
        if(root == NULL){
            return;

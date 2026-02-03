@@ -24,6 +24,7 @@ typedef enum {
     MOVE_OK = 19,
     MOVE_FAILED = 20,
     CANNOT_MOVE_TO_IT_SELF = 21,
-    DEST_ALREADY_EXISTS = 22
+    DEST_ALREADY_EXISTS = 22,
+    ITEM_IS_NOT_FILE_OR_DIR = 23
 }FS_ERROR;
 #endif

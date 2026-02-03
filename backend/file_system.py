@@ -29,6 +29,9 @@ lib.remove_file.restype = ctypes.c_int
 lib.move.argtypes = [FS_p , ctypes.c_char_p, ctypes.c_char_p]
 lib.move.restype = ctypes.c_int
 
+lib.change_name.argtypes = [FS_p , ctypes.c_char_p , ctypes.c_char_p]
+lib.change_name.restype = ctypes.c_int
+
 lib.show_file_content.argtypes = [FS_p , ctypes.c_char_p]
 lib.show_file_content.restype = ctypes.c_void_p
 
@@ -75,6 +78,8 @@ class File_System:
         return lib.delete_dir(self.fs , path.encode())
     def cut(self , src_path : str , dest_path : str):
         return lib.move(self.fs, src_path.encode() , dest_path.encode())
+    def rename(self , path : str , new_name : str):
+        return lib.change_name(self.fs, path.encode(), new_name.encode())
     def get_contents(self,path):
         res = lib.view_contents(self.fs,path.encode())
         i = 0
