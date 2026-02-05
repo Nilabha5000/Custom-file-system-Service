@@ -18,6 +18,7 @@ FS_ERROR create_file(struct FS * , const char *);
 FS_ERROR write_file(struct FS * , const char *, const char *);
 FS_ERROR remove_file(struct FS * , const char *);
 FS_ERROR move(struct FS * , const char * , const char *);
+FS_ERROR copy(struct FS * , const char * , const char *);
 FS_ERROR change_name(struct FS * , const char *, const char *);
 char* show_file_content(struct FS *, const char *);
 void delete_dir_tree(struct dir *);

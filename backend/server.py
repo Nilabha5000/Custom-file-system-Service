@@ -121,6 +121,19 @@ def move(req : DoublePathRequest):
         if status == 22:
             return {"status" : "FAILURE" , "message" : "It already exists so can not move"}
         return {"status" : "OK" , "result" : fs.get_contents(req.dest_path)}
+@app.post("/api/copy/")
+def copy(req : DoublePathRequest):
+    with fs_lock:
+        if (not req.src_path and not req.dest_path ) and (len(req.src_path.strip()) == 0 and len(req.dest_path.strip()) == 0 ):
+            return {"status" : "FAILURE" , "message" : "empty field"}
+        status = fs.cp(req.src_path , req.dest_path)
+        if status == 9:
+            return {"status" : "FAILURE" , "message" : "Directory not found"}
+        if status == 25:
+            return {"status" : "FAILURE" , "message" : "Directory can not copy to itself"}
+        if status == 22:
+            return {"status" : "FAILURE" , "message" : "It already exists so can not copy"}
+        return {"status" : "OK" , "result" : fs.get_contents(req.dest_path)}
 
 @app.post("/api/rename/")
 def rename_item(req : itemRenameRequest):

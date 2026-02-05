@@ -14,6 +14,7 @@ export default {
       move_item : "",
       show_move_button : false,
       show_to_move_button : false,
+      show_copy_button : false,
       displayDirCreation:false,
       displayFileCreation : false,
       displayDirDeletion : false,
@@ -27,7 +28,10 @@ export default {
       showEditor : false,
       menuX: 0,
       menuY: 0,
+      menuEmptyX : 0,
+      menuEmptyY : 0,
       showMenu:false,
+      showMenuEmpty : false,
       selectedItem : null
     }
   },
@@ -43,7 +47,9 @@ export default {
   },
   methods: {
     on_right_click(event , item){
+          event.preventDefault();
           this.showMenu = true;
+          this.showMenuEmpty = false;
           this.menuX = event.clientX;
           this.menuY = event.clientY;
           this.selectedItem = item;
@@ -55,8 +61,12 @@ export default {
              this.filename = this.selectedItem.name;
           }
     },
-    on_right_click_empty(){
-         alert("right click on empty space");
+    on_right_click_empty(event){
+         event.preventDefault();
+        this.showMenuEmpty = true;
+        this.showMenu = false;
+          this.menuEmptyX = event.clientX;
+          this.menuEmptyY = event.clientY;
     },
     async item_on_click(item) {
        if(item.type === 'dir'){
@@ -119,6 +129,7 @@ export default {
             const res = await axios.post(`http://localhost:8000/api/mkdir/`,
               {path : this.path_arr.join("/") + `/${this.dirname}`}
             );
+            this.displayDirCreation = false;
             if(res.data.status === "FAILURE"){
                 alert(res.data.message);
                 this.dirname = "";
@@ -134,6 +145,7 @@ export default {
     },
     async create_file(){
       const res = await axios.post("http://localhost:8000/api/create_file/",{path : this.path_arr.join("/") + `/${this.filename}`});
+      this.displayFileCreation = false;
       if(res.data.status === "FAILURE"){
         alert(res.data.message);
       }
@@ -204,11 +216,39 @@ export default {
            this.items = res.data.result;
         }
     },
-    save_to_src_path(){
+     async cp(){
+        const s_path = this.src_path.split("/");
+        const item = s_path[s_path.length-1];
+
+        for(let i = this.path_arr.length-2 ; i >= 0; --i){
+            if(item === this.path_arr[i]){
+                 
+                 alert("lllDirectory can not move it to itself");
+                 return;
+            }
+        }
+
+        const res = await axios.post("http://localhost:8000/api/copy/",
+          {src_path : this.src_path , dest_path : this.path_arr.join("/")}
+        );
+        console.log(this.src_path);
+        console.log(this.path_arr.join("/"));
+        this.show_copy_button = false;
+        if(res.data.status === "FAILURE"){
+             alert(res.data.message);
+        }
+        else{
+           this.items = res.data.result;
+        }
+    },
+    save_to_src_path_for_move(){
          this.src_path = this.path_arr.join("/") + `/${this.selectedItem.name}`;
          this.show_move_button = true;
     },
-    
+    save_to_src_path_for_copy(){
+         this.src_path = this.path_arr.join("/") + `/${this.selectedItem.name}`;
+         this.show_copy_button = true;
+    },
     async rename(){
          const res = await axios.post("http://localhost:8000/api/rename",
           {path : this.path_arr.join("/") + `/${this.selectedItem.name}` , new_name : this.new_name}
@@ -233,42 +273,15 @@ export default {
   <div class = "nav_bar">
       <h1>{{ path_arr[path_arr.length-1]}}</h1>
       <v-btn @click="go_back" color="primary" variant="outlined"><</v-btn>
-    <v-btn @click = "displayDirCreation = !displayDirCreation">Create Directory</v-btn>
-    <div v-if = "displayDirCreation">
-       <input type="text" placeholder="Directory Name" v-model = "dirname">
-       <v-btn @click = "create_dir">Create</v-btn>
-    </div>
-
-    <v-btn @click = "displayDirDeletion = !displayDirDeletion">Delete Directory</v-btn>
-    <div v-if = "displayDirDeletion">
-       <input type="text" placeholder="Directory Name" v-model = "dirname">
-       <v-btn @click = "del_dir">Remove</v-btn>
-    </div>
-    <v-btn @click = "displayFileCreation = !displayFileCreation">Create File</v-btn>
-    <div v-if = "displayFileCreation">
-       <input type="text" placeholder="File Name" v-model = "filename">
-       <v-btn @click = "create_file">Create</v-btn>
-    </div>
-     <v-btn @click = "displayFileDeletion = !displayFileDeletion">Delete File</v-btn>
-    <div v-if = "displayFileDeletion">
-       <input type="text" placeholder="File Name" v-model = "filename">
-       <v-btn @click = "del_file">Remove</v-btn>
-    </div>
-    <v-btn @click = "show_to_move_button = !show_to_move_button">To move</v-btn>
-    <div v-if = "show_to_move_button">
-       <input type="text" placeholder="Item Name" v-model = "move_item">
-       <v-btn @click = "save_to_src_path">To Move</v-btn>
-    </div>
-    <v-btn v-if = "show_move_button" @click = "mv">Move</v-btn>
   </div>
   
-  <div >
+  <div @contextmenu.prevent = "on_right_click_empty($event)">
       <h1 v-if = "!items || items.length === 0" class = "dir_empty">directory is empty</h1>
      
      <v-container v-else>
     <v-row>
       <v-col cols="12" md="3" v-for = "item in items" :key = "item.name">
-        <div @click = "item_on_click(item)" class = "icon" @contextmenu.prevent = "on_right_click($event,item)">
+        <div @click = "item_on_click(item)" class = "icon" @contextmenu.stop.prevent = "on_right_click($event,item)">
              <img :src= "dirImg" alt="dir img" width="80" v-if = "item.type === 'dir'"/>
              <img :src= "fileImg" alt="file img" width="80" v-if = "item.type === 'file'"/>
              <p>{{ item.name }}</p>
@@ -299,19 +312,60 @@ export default {
       <v-list-item-title>Delete</v-list-item-title>
     </v-list-item>
 
-    <v-list-item @click="save_to_src_path">
+    <v-list-item @click="save_to_src_path_for_move">
       <v-list-item-title>Cut</v-list-item-title>
     </v-list-item>
+    <v-list-item @click="save_to_src_path_for_copy">
+      <v-list-item-title>Copy</v-list-item-title>
+    </v-list-item>
     <v-list-item @click="mv" v-if = "show_move_button">
+      <v-list-item-title>Paste</v-list-item-title>
+    </v-list-item>
+    <v-list-item @click="cp" v-if = "show_copy_button">
+      <v-list-item-title>Paste</v-list-item-title>
+    </v-list-item>
+    <v-list-item @click="displayDirCreation = true">
+      <v-list-item-title>Create Directory</v-list-item-title>
+    </v-list-item>
+    <v-list-item @click="displayFileCreation = true">
+      <v-list-item-title>Create File</v-list-item-title>
+    </v-list-item>
+  </v-list>
+  </v-menu>
+    <v-menu
+   v-model = "showMenuEmpty"
+   :style = "{ left: menuEmptyX + 'px', top: menuEmptyY + 'px' }"
+   absolute
+   offset-y
+  >
+   <v-list>
+   <v-list-item @click="displayDirCreation = true">
+      <v-list-item-title>Create Directory</v-list-item-title>
+    </v-list-item>
+    <v-list-item @click="displayFileCreation = true">
+      <v-list-item-title>Create File</v-list-item-title>
+    </v-list-item>
+    <v-list-item @click="mv" v-if = "show_move_button">
+      <v-list-item-title>Paste</v-list-item-title>
+    </v-list-item>
+    <v-list-item @click="cp" v-if = "show_copy_button">
       <v-list-item-title>Paste</v-list-item-title>
     </v-list-item>
     
   </v-list>
   </v-menu>
-    <div v-if = "show_rename_box" class="rename-box">
-      <input type="text" v-model="new_name" class = "rename-input" placeholder="Enter new name">
-    <v-btn  @click = "rename" class="rename-btn">Rename</v-btn>
+    <div v-if = "show_rename_box" class="box">
+      <input type="text" v-model="new_name" class = "box-input" placeholder="Enter new name">
+    <v-btn  @click = "rename" class="box-btn">Rename</v-btn>
   </div>
+  <div v-if = "displayDirCreation" class = "box">
+       <input type="text" placeholder="Directory Name" v-model = "dirname" class = "box-input">
+       <v-btn @click = "create_dir" class="box-btn">Create</v-btn>
+    </div>
+  <div v-if = "displayFileCreation" class = "box">
+       <input type="text" placeholder="File Name" v-model = "filename" class = "box-input">
+       <v-btn @click = "create_file" class="box-btn">Create</v-btn>
+    </div>
   <v-dialog v-model="showEditor" max-width="700">
   <v-card>
     <v-card-title>
@@ -477,7 +531,7 @@ h1 {
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.04);
   letter-spacing: 0.3px;
 }
-.rename-box {
+.box {
   position: fixed;
   top: 50%;
   left: 50%;
@@ -497,7 +551,7 @@ h1 {
 }
 
 /* Input field */
-.rename-input {
+.box-input {
   width: 220px;
   padding: 8px 10px;
 
@@ -510,12 +564,12 @@ h1 {
   transition: border 0.2s ease;
 }
 
-.rename-input:focus {
+.box-input:focus {
   border-color: #1976d2; /* Vuetify blue */
 }
 
 /* Button */
-.rename-btn {
+.box-btn {
   min-width: 90px !important;
   font-weight: 500;
 }

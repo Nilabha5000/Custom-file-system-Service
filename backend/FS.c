@@ -26,7 +26,117 @@ void save_dir(struct dir *d, FILE *fp);
 struct FS *initFS();
 int belongs_to(struct dir *src_dir, struct path *p);
 int is_decendent(struct dir *src , struct dir *dest);
+struct file *clone_file(struct file *);
+struct dir *clone_dir_tree(struct dir *);
 struct dir *make_directory(const char *);
+
+struct file *clone_file(struct file *f){
+    if(!f) return NULL;
+     
+    struct file *new_file = (struct file*)malloc(sizeof(struct file));
+    if(!new_file) return NULL;
+    char *name = strdup(f->file_name);
+
+    if(!name){
+        free(new_file);
+        return NULL;
+    }
+    name[strlen(name)] = '\0';
+    new_file->file_name = name;
+
+    strcpy(new_file->content_buffer, f->content_buffer);
+
+    return new_file;
+    
+}
+
+struct dir *clone_dir_tree(struct dir *root){
+
+    if(!root) return NULL;
+
+    struct queue *q1 = q_init();
+    struct queue *q2 = q_init();
+    int clonned_failed = 0; 
+    struct dir *clone_root = make_directory(root->dir_name);
+    if(clone_root == NULL){
+          clonned_failed = 1;
+          goto cleanup;
+    }
+    
+    q_push(q1,root);
+    q_push(q2,clone_root);
+    while(!q_empty(q1) && !q_empty(q2)){
+        struct dir *temp_dir = q_front(q1);
+        struct dir *clonned_dir = q_front(q2);
+        
+        q_pop(q1);
+        q_pop(q2);
+       
+        //clonning logic for files 
+        struct bucket_list *file_iterartor = temp_dir->files->begin;
+        for(; file_iterartor != NULL; file_iterartor = file_iterartor->next){
+            struct bucket *file_bucktes = file_iterartor->start;
+
+            for(; file_bucktes != NULL; file_bucktes = file_bucktes->next){
+                 struct file *f = (struct file*)file_bucktes->value;
+                 struct file *clonned_f = clone_file(f);
+                if(clonned_f == NULL){
+                    clonned_failed = 1;
+                    goto cleanup;
+                }
+                if(clonned_dir->files == NULL){
+                    clonned_failed = 1;
+                    goto cleanup;
+                }
+
+                if(!insert_obj(clonned_dir->files,clonned_f->file_name,clonned_f)){
+                    clonned_failed = 1;
+                    goto cleanup;
+                }
+
+            }
+
+        }
+        
+        struct bucket_list *dir_iterartor = temp_dir->child->begin;
+        for(; dir_iterartor != NULL; dir_iterartor = dir_iterartor->next){
+            struct bucket *dir_bucktes = dir_iterartor->start;
+
+            for(; dir_bucktes != NULL; dir_bucktes = dir_bucktes->next){
+                 struct dir *d = (struct dir*)dir_bucktes->value;
+                 struct dir *clonned_d = make_directory(d->dir_name);
+                if(clonned_d == NULL){
+                    clonned_failed = 1;
+                    goto cleanup;
+                }
+                if(clonned_dir->child == NULL){
+                    clonned_failed = 1;
+                    goto cleanup;
+                }
+
+                if(!insert_obj(clonned_dir->child,clonned_d->dir_name,clonned_d)){
+                    clonned_failed = 1;
+                    goto cleanup;
+                }
+                
+                clonned_d->parent = clonned_dir;
+                q_push(q1,d);
+                q_push(q2,clonned_d);
+            }
+
+        }
+
+
+    }
+    cleanup:
+    if(clonned_failed){
+        delete_dir_tree(clone_root);
+        clone_root = NULL;
+    }
+    q_destroy(q1);
+    q_destroy(q2);
+    return clone_root;
+}
 struct FS *initFS(){
      struct FS *fs = (struct FS*)malloc(sizeof(struct FS));
      if(fs == NULL) return NULL;
@@ -498,6 +608,156 @@ cleanup:
     return ret;
 }
 
+FS_ERROR copy(struct FS *fs,
+              const char *src_path,
+              const char *dest_path)
+{
+    if (!fs || !src_path || !dest_path)
+        return FS_FAILED;
+
+    FS_ERROR ret = COPY_FAILED;
+
+    struct path *src = NULL;
+    struct path *dest = NULL;
+
+    char *s_src = get_slashed_path(src_path);
+    char *s_dest = get_slashed_path(dest_path);
+
+    if (!s_src || !s_dest)
+        goto cleanup;
+
+    src = get_path(s_src);
+    dest = get_path(s_dest);
+
+    if (!src || !dest)
+        goto cleanup;
+
+    /* Get parent directories */
+    struct dir *src_parent = get_dest_dir(fs, src);
+    struct dir *dest_parent = get_dest_dir(fs, dest);
+
+    if (!src_parent || !dest_parent)
+    {
+        ret = DIR_NOT_FOUND;
+        goto cleanup;
+    }
+
+    /* Final destination dir */
+    struct dir *dest_dir =
+        (struct dir *)get_obj(dest_parent->child,
+                              dest->end->name);
+
+    if (!dest_dir)
+    {
+        ret = DIR_NOT_FOUND;
+        goto cleanup;
+    }
+
+    /* What are we moving? */
+    int type = belongs_to(src_parent, src);
+
+    /* ========== COPY DIRECTORY ========== */
+
+    if (type == Dir)
+    {
+        struct dir *src_dir =
+            (struct dir *)get_obj(src_parent->child,
+                                  src->end->name);
+
+        if (!src_dir)
+        {
+            ret = DIR_NOT_FOUND;
+            goto cleanup;
+        }
+
+        /* Prevent self / descendant copy */
+        if (is_descendant(src_dir, dest_dir))
+        {
+            ret = CANNOT_COPY_TO_IT_SELF;
+            goto cleanup;
+        }
+
+        /* Check overwrite */
+        if (get_obj(dest_dir->child, src_dir->dir_name))
+        {
+            ret = DEST_ALREADY_EXISTS;
+            goto cleanup;
+        }
+
+        
+        struct dir *clonned_src_dir = clone_dir_tree(src_dir);
+        if(clonned_src_dir == NULL){
+            ret = COPY_FAILED;
+            goto cleanup;
+        }
+        /* Attach */
+        if (!insert_obj(dest_dir->child,
+                        clonned_src_dir->dir_name,
+                        clonned_src_dir))
+        {
+
+            ret = COPY_FAILED;
+            goto cleanup;
+        }
+
+        /* Fix parent */
+        clonned_src_dir->parent = dest_dir;
+
+        ret = COPY_OK;
+        goto cleanup;
+    }
+
+    /* ========== COPY FILE ========== */
+
+    if (type == File)
+    {
+        struct file *f =
+            (struct file *)get_obj(src_parent->files,
+                                   src->end->name + 1);
+
+        if (!f)
+        {
+            ret = FILE_NOT_FOUND;
+            goto cleanup;
+        }
+
+        if (get_obj(dest_dir->files, f->file_name))
+        {
+            ret = DEST_ALREADY_EXISTS;
+            goto cleanup;
+        }
+
+        struct file *clonned_f = clone_file(f);
+        if(clonned_f == NULL){
+            ret = COPY_FAILED;
+            goto cleanup;
+        }
+
+        /* Attach */
+        if (!insert_obj(dest_dir->files,
+                        clonned_f->file_name,
+                        clonned_f))
+        {
+            ret = COPY_FAILED;
+            goto cleanup;
+        }
+
+        ret = COPY_OK;
+        goto cleanup;
+    }
+
+    ret = COPY_FAILED;
+
+cleanup:
+
+    if (s_src) free(s_src);
+    if (s_dest) free(s_dest);
+
+    if (src) path_destroy(src);
+    if (dest) path_destroy(dest);
+
+    return ret;
+}
 FS_ERROR change_name(struct FS *fs , const char *path , const char *new_name){
     if(fs == NULL)
       return FS_FAILED;
