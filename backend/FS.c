@@ -4,9 +4,11 @@
 #include "path.h"
 #include <errno.h>
 #include <string.h>
-
+#include <pthread.h>
+#include <unistd.h>
 #define Dir 1
 #define File 2
+int is_modified = 0;
 struct file{
     char *file_name;
     char content_buffer[MAX_CONTENT_LEN];
@@ -21,11 +23,12 @@ struct dir{
 struct FS{
     struct dir root_parent;
     struct dir *root;
+    pthread_mutex_t lock;
 };
 void save_dir(struct dir *d, FILE *fp);
 struct FS *initFS();
 int belongs_to(struct dir *src_dir, struct path *p);
-int is_decendent(struct dir *src , struct dir *dest);
+int is_descendant(struct dir *src , struct dir *dest);
 struct file *clone_file(struct file *);
 struct dir *clone_dir_tree(struct dir *);
 struct dir *make_directory(const char *);
@@ -267,7 +270,7 @@ FS_ERROR create_file(struct FS *fs , const char *file_path){
 
      free(filename);
      path_destroy(p);
-
+     is_modified = 1;
      return FILE_OK;
 }
 
@@ -302,6 +305,7 @@ FS_ERROR remove_file(struct FS *fs , const char *file_path){
      free(getfile->file_name);
      free(getfile);
      path_destroy(p);
+     is_modified = 1;
      return FILE_OK;
 }
 
@@ -336,7 +340,7 @@ FS_ERROR write_file(struct FS *fs , const char *content , const char *file_path)
      }
      path_destroy(p);
      strncpy(getfile->content_buffer,content,MAX_CONTENT_LEN-1);
-     
+     is_modified = 1;
      return FILE_OK;
 }
 
@@ -416,7 +420,7 @@ FS_ERROR make_directory_in_a_directory(struct FS *fs , const char *dir_path){
      insert_obj(dest_dir->child,new_dir->dir_name,new_dir);
 
      path_destroy(p);
-
+     is_modified = 1;
      return DIR_OK;
 }
 //It returns an Int.
@@ -551,6 +555,7 @@ FS_ERROR move(struct FS *fs,
         src_dir->parent = dest_dir;
 
         ret = MOVE_OK;
+        is_modified = 1;
         goto cleanup;
     }
 
@@ -592,6 +597,7 @@ FS_ERROR move(struct FS *fs,
         }
 
         ret = MOVE_OK;
+        is_modified = 1;
         goto cleanup;
     }
 
@@ -604,7 +610,7 @@ cleanup:
 
     if (src) path_destroy(src);
     if (dest) path_destroy(dest);
-
+    
     return ret;
 }
 
@@ -704,6 +710,7 @@ FS_ERROR copy(struct FS *fs,
         clonned_src_dir->parent = dest_dir;
 
         ret = COPY_OK;
+        is_modified = 1;
         goto cleanup;
     }
 
@@ -743,6 +750,7 @@ FS_ERROR copy(struct FS *fs,
         }
 
         ret = COPY_OK;
+        is_modified = 1;
         goto cleanup;
     }
 
@@ -810,6 +818,7 @@ FS_ERROR change_name(struct FS *fs , const char *path , const char *new_name){
         insert_obj(dest_parent->child,dest->dir_name, dest);
 
         ret = DIR_OK;
+        is_modified = 1;
     }
     else if(type == File){
         struct file *dest_file = (struct file *)get_obj(dest_parent->files,p->end->name+1);
@@ -829,6 +838,7 @@ FS_ERROR change_name(struct FS *fs , const char *path , const char *new_name){
         
         insert_obj(dest_parent->files, dest_file->file_name, dest_file);
         ret = FILE_OK;
+        is_modified = 1;
     }
     cleanup:
     path_destroy(p);
@@ -908,7 +918,7 @@ FS_ERROR delete_dir(struct FS *fs , char *dir_path){
      }
      delete_dir_tree(recieved_dir);
      path_destroy(p);
-
+     is_modified = 1;
      return DIR_OK;
 }
 char** view_contents(struct FS *fs , const char *dir_path){
@@ -978,11 +988,13 @@ void destroy_FS(struct FS *fs){
 }
 
 int save_fs(struct FS *fs , const char *filename){
+     if(!is_modified) return 0;
      FILE *fp = fopen(filename, "wb");
      if(!fp) return 0;
      
      save_dir(fs->root,fp);
      fclose(fp);
+     is_modified = 0;
      return 1;
 }
 void save_dir(struct dir *d , FILE *fp){
@@ -1076,6 +1088,7 @@ struct FS *load_FS(const char *filename){
     fs->root_parent.child = create_table();
     insert_obj(fs->root_parent.child , fs->root->dir_name, fs->root);
     fclose(fp);
-
+    pthread_mutex_init(&fs->lock, NULL);
     return fs;
 }
+

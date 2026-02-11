@@ -57,7 +57,7 @@ lib.free_string_array.argtypes = [ctypes.POINTER(ctypes.c_char_p)]
 lib.free_string_array.restype = None
 
 class File_System:
-    def __init__(self, path):
+    def __init__(self, path : str):
         self.fs = lib.load_FS(path.encode())
         self.load_path = path
         pass
@@ -96,7 +96,8 @@ class File_System:
             pass
         lib.free_string_array(res)
         return contents
-    
+    def save(self):
+        lib.save_fs(self.fs , self.load_path.encode())
     def close(self):
         lib.save_fs(self.fs , self.load_path.encode())
         lib.destroy_FS(self.fs)

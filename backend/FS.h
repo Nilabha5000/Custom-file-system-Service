@@ -25,7 +25,6 @@ void delete_dir_tree(struct dir *);
 FS_ERROR delete_dir(struct FS *, char *);
 char** view_contents(struct FS * , const char *);
 void destroy_FS(struct FS *);
-
 int save_fs(struct FS * , const char *);
 
 #endif

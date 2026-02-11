@@ -4,7 +4,7 @@ from typing import Union
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import threading
-
+import asyncio
 class PathRequest(BaseModel):
     path : str
     pass
@@ -32,6 +32,14 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+async def autosavehandler():
+    while True:
+        await asyncio.sleep(30)
+        await asyncio.to_thread(fs.save)
+
+@app.on_event("startup")
+async def autosave():
+    asyncio.create_task(autosavehandler())
 
 @app.post("/api/get_dir_contents/")
 def get_dir_contents(dir_path : PathRequest):
