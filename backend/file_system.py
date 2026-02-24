@@ -1,6 +1,6 @@
 import ctypes
 import json
-lib = ctypes.CDLL("./fslib.so")
+lib = ctypes.CDLL("./native/build/fslib.so")
 
 class FS(ctypes.Structure):
     pass
@@ -97,9 +97,10 @@ class File_System:
         lib.free_string_array(res)
         return contents
     def save(self):
-        lib.save_fs(self.fs , self.load_path.encode())
+        return lib.save_fs(self.fs , self.load_path.encode())
     def close(self):
-        lib.save_fs(self.fs , self.load_path.encode())
+        if lib.save_fs(self.fs , self.load_path.encode()) == 0:
+            print("cannot be saved")
         lib.destroy_FS(self.fs)
         self.fs = None
         pass
