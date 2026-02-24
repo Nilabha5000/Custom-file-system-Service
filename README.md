@@ -101,6 +101,7 @@ The core filesystem is implemented in C for performance and low-level control, w
 ---
 
 ## 📂 Project Structure (High-Level)
+```
 backend/
 ├── native/                 # C-based filesystem core
 │   ├── src/                # Core source files
@@ -115,7 +116,7 @@ backend/
 │
 ├── server.py                 # FastAPI entry point
 ├── file_system.py        # Wrapping all C functions to make it usable for python.
-
+```
 ---
 
 ## ⚙️ Setup (High-Level)
