@@ -21,7 +21,7 @@
                     }
                     else{
                         this.userInfo = resData.result;
-                        localStorage.setItem("userCred" , JSON.stringify(this.userInfo))
+                        localStorage.setItem("userCred" , JSON.stringify({username : resData.result.username , token : resData.access_token}))
                         router.push("/fs");
                     }
                 }

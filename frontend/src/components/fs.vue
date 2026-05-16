@@ -8,7 +8,7 @@ export default {
     return {
       fileImg,
       dirImg,
-      userCred : {userId : "" , username : ""},
+      userCred : {token : "" , username : ""},
       items:[],
       path_arr:[],
       src_path : "",
@@ -83,7 +83,12 @@ export default {
       }
       else{
         const res = await axios.post("http://localhost:8000/api/get_file_content/",
-            {userId : this.userCred.userId,path : this.path_arr.join("/") + `/${item.name}`}
+            {path : this.path_arr.join("/") + `/${item.name}`},
+            {
+              headers:{
+                 Authorization : `Bearer ${this.userCred.token}`
+              }
+            }
         );
 
         this.activefile = item.name;
@@ -94,9 +99,13 @@ export default {
     }
     ,
     async get_dir_contents(dir_path){
-      console.log(this.userCred.userId);
        const res = await axios.post(`http://localhost:8000/api/get_dir_contents/`,
-          {userId : this.userCred.userId,path : dir_path}
+          {path : dir_path},
+          {
+            headers: {
+            Authorization: `Bearer ${this.userCred.token}`
+            }
+          }
         );
         
         if(res.data.status === "FAILURE"){
@@ -125,13 +134,19 @@ export default {
        }
        else{
           alert(res_list[1]);
+          
        }
 
     },
     async create_dir(){
         if(this.dirname.length !== 0){
             const res = await axios.post(`http://localhost:8000/api/mkdir/`,
-              {userId : this.userCred.userId,path : this.path_arr.join("/") + `/${this.dirname}`}
+              {path : this.path_arr.join("/") + `/${this.dirname}`},
+              {
+                headers :{
+                    Authorization : `Bearer ${this.userCred.token}`
+                }
+              }
             );
             this.displayDirCreation = false;
             if(res.data.status === "FAILURE"){
@@ -148,8 +163,14 @@ export default {
         }
     },
     async create_file(){
-      const res = await axios.post("http://localhost:8000/api/create_file/",{userId : this.userCred.userId,
-        path : this.path_arr.join("/") + `/${this.filename}`});
+      const res = await axios.post("http://localhost:8000/api/create_file/",{
+        path : this.path_arr.join("/") + `/${this.filename}`},
+        {
+          headers:{
+             Authorization: `Bearer ${this.userCred.token}`
+          }
+        }
+      );
       this.displayFileCreation = false;
       if(res.data.status === "FAILURE"){
         alert(res.data.message);
@@ -159,8 +180,14 @@ export default {
       }
     },
     async saveFile(){
-         const res =  await axios.post("http://localhost:8000/api/write_file_content/",{userId : this.userCred.userId,path : this.path_arr.join("/") + `/${this.activefile}`
-         , content : this.fileContent})
+         const res =  await axios.post("http://localhost:8000/api/write_file_content/",{path : this.path_arr.join("/") + `/${this.activefile}`
+         , content : this.fileContent},
+         {
+           headers :{
+              Authorization : `Bearer ${this.userCred.token}`
+           }
+         }
+        )
 
          if(res.data.status === "FAILURE"){
              alert(res.data.message)
@@ -168,7 +195,13 @@ export default {
     },
     async del_dir(){
       const res = await axios.post("http://localhost:8000/api/remove_dir/",
-        {userId : this.userCred.userId,path : this.path_arr.join("/") + `/${this.dirname}`});
+        {path : this.path_arr.join("/") + `/${this.dirname}`},
+        {
+           headers:{
+               Authorization : `Bearer ${this.userCred.token}`
+           }
+        }
+      );
         if(res.data.status === "FAILURE"){
              alert(res.data.message);
         }
@@ -178,7 +211,13 @@ export default {
     },
      async del_file(){
       const res = await axios.post("http://localhost:8000/api/remove_file/",
-        {userId : this.userCred.userId,path : this.path_arr.join("/") + `/${this.filename}`});
+        {path : this.path_arr.join("/") + `/${this.filename}`},
+        {
+           headers:{
+              Authorization : `Bearer ${this.userCred.token}`
+           }
+        }
+      );
         if(res.data.status === "FAILURE"){
              alert(res.data.message);
         }
@@ -208,7 +247,12 @@ export default {
         }
 
         const res = await axios.post("http://localhost:8000/api/move/",
-          {userId : this.userCred.userId,src_path : this.src_path , dest_path : this.path_arr.join("/")}
+          {src_path : this.src_path , dest_path : this.path_arr.join("/")},
+          {
+            headers:{
+               Authorization : `Bearer ${this.userCred.token}`
+            }
+          }
         );
         console.log(this.src_path);
         console.log(this.path_arr.join("/"));
@@ -234,7 +278,12 @@ export default {
         }
 
         const res = await axios.post("http://localhost:8000/api/copy/",
-          {userId : this.userCred.userId,src_path : this.src_path , dest_path : this.path_arr.join("/")}
+          {src_path : this.src_path , dest_path : this.path_arr.join("/")},
+          {
+            headers :{
+              Authorization : `Bearer ${this.userCred.token}`
+            }
+          }
         );
         console.log(this.src_path);
         console.log(this.path_arr.join("/"));
@@ -256,7 +305,12 @@ export default {
     },
     async rename(){
          const res = await axios.post("http://localhost:8000/api/rename",
-          {userId : this.userCred.userId ,path : this.path_arr.join("/") + `/${this.selectedItem.name}` , new_name : this.new_name}
+          {path : this.path_arr.join("/") + `/${this.selectedItem.name}` , new_name : this.new_name},
+          {
+            headers:{
+              Authorization : `Bearer ${this.userCred.token}`
+            }
+          }
          );
          this.show_rename_box = false;
          this.new_name = "";
@@ -270,22 +324,25 @@ export default {
     },
     async signout(){
        try{
-          const res = await axios.post("http://localhost:8000/api/signout" , {userId : this.userCred.userId});
+          const res = await axios.delete("http://localhost:8000/api/signout" , {
+             
+             headers:{
+                 Authorization : `Bearer ${this.userCred.token}`
+             }
+          });
           if(res.data.status === "OK"){
               this.items = [];
               this.userCred = {userId : "" , username : ""};
               this.path_arr = [];
               localStorage.clear();
-              router.push("/signin");
-
           }
-          else{
-            alert("can not be signed out");
-          }
+          router.push("/signin");
+          
          
        }
        catch(e){
-           alert("can not be signed out");
+           console.log(e);
+           router.push("/signin");
        }
        
     }
